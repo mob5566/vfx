@@ -11,3 +11,6 @@
 # vim temp files
 *.vim
 *.swp
+
+# image list file
+*.txt
