@@ -15,10 +15,11 @@ import cv2
 import numpy as np
 
 # Triangular hat weighting function
-w = lambda(z): float(z) if z<=127 else float(255-z)
+w = np.arange(256)
+w[w>127] = 255.-w[w>127]
 
 # Fill the Sparse linear system
-def getOptimizeMatrix(imgs, expts, pts, lamb):
+def getOptimizeMatrix(imgs, lnts, pts, lamb):
   nImgs = imgs.shape[0]
   nPts = len(pts)
 
@@ -30,17 +31,17 @@ def getOptimizeMatrix(imgs, expts, pts, lamb):
   for j, img in enumerate(imgs):
     for i, pt in enumerate(pts):
       z = img[pt]
-      A[k, z] = w(z)
-      A[k, i+256] = w(z)
-      b[k] = np.log(expts[j])*w(z)
+      A[k, z] = w[z]
+      A[k, i+256] = w[z]
+      b[k] = lnts[j]*w[z]
       k += 1
   A[k, 127] = 1.
   k += 1
 
   for i in xrange(254):
-    A[k, i] = w(i+1)*lamb
-    A[k, i+1] = -2.*w(i+1)*lamb
-    A[k, i+2] = w(i+1)*lamb
+    A[k, i] = w[i+1]*lamb
+    A[k, i+1] = -2.*w[i+1]*lamb
+    A[k, i+2] = w[i+1]*lamb
     k+=1
 
   return A, b
@@ -49,13 +50,13 @@ def getOptimizeMatrix(imgs, expts, pts, lamb):
 def getRespondseFunction(A, b):
   invA = np.linalg.pinv(A)
   x = np.dot(invA, b)
-  g = x[:256]
-  le = x[256:]
+  g = x[:256].reshape(-1)
+  le = x[256:].reshape(-1)
 
   return g, le
 
 # Default parameters
-outImage = 'img.hdr'
+outImage = 'img'
 nPoints = 50
 
 if len(sys.argv)!=2 and len(sys.argv)!=3:
@@ -80,6 +81,7 @@ with open(inFile, 'rb') as f:
     expts.append(exptime)
 
 imgs = np.array(imgs)
+lnts = np.log(expts)
 
 # Generate random points
 imgHeight, imgWidth, imgChannels = imgs[0].shape
@@ -88,13 +90,53 @@ pts = [(np.random.randint(0, imgHeight), np.random.randint(0, imgWidth))
        for _ in xrange(nPoints)]
 
 # Fill the optimization matrix
-Ar, br = getOptimizeMatrix(imgs[:, :, :, 0].reshape(-1, imgHeight, imgWidth), expts, pts, 10.)
-Ag, bg = getOptimizeMatrix(imgs[:, :, :, 1].reshape(-1, imgHeight, imgWidth), expts, pts, 10.)
-Ab, bb = getOptimizeMatrix(imgs[:, :, :, 2].reshape(-1, imgHeight, imgWidth), expts, pts, 10.)
+lamb = 1.
+Ar, br = getOptimizeMatrix(imgs[:, :, :, 2].reshape(-1, imgHeight, imgWidth), lnts, pts, lamb)
+Ag, bg = getOptimizeMatrix(imgs[:, :, :, 1].reshape(-1, imgHeight, imgWidth), lnts, pts, lamb)
+Ab, bb = getOptimizeMatrix(imgs[:, :, :, 0].reshape(-1, imgHeight, imgWidth), lnts, pts, lamb)
 
 # Solve the optimization eqation by SVD
 gr, ler = getRespondseFunction(Ar, br)
 gg, leg = getRespondseFunction(Ag, bg)
 gb, leb = getRespondseFunction(Ab, bb)
 
+import matplotlib.pyplot as plt
 
+plt.plot(np.arange(len(gr)), gr, 'r')
+plt.plot(np.arange(len(gg)), gg, 'g')
+plt.plot(np.arange(len(gb)), gb, 'b')
+plt.legend(['R', 'G', 'B'])
+
+plt.savefig('z-lnE.png')
+
+# Generate the radiance map
+print('Generate the radiance map...')
+radm = np.zeros((imgHeight, imgWidth, 3))
+
+for r in xrange(imgHeight):
+  for c in xrange(imgWidth):
+    zr = imgs[:, r, c, 2]
+    zg = imgs[:, r, c, 1]
+    zb = imgs[:, r, c, 0]
+    radm[r, c, 2] = np.exp(np.sum(w[zr]*(gr[zr]-lnts))/np.sum(w[zr]))
+    radm[r, c, 1] = np.exp(np.sum(w[zg]*(gg[zg]-lnts))/np.sum(w[zg]))
+    radm[r, c, 0] = np.exp(np.sum(w[zb]*(gb[zb]-lnts))/np.sum(w[zb]))
+
+# Output the HDR image
+cv2.imwrite(outImage+'.hdr', radm)
+
+radm = np.log(radm)
+
+radm[:, :, 0] = (radm[:, :, 0]-radm[:, :, 0].min())/(radm[:, :, 0].max()-radm[:, :, 0].min())*255
+radm[:, :, 1] = (radm[:, :, 1]-radm[:, :, 1].min())/(radm[:, :, 1].max()-radm[:, :, 1].min())*255
+radm[:, :, 2] = (radm[:, :, 2]-radm[:, :, 2].min())/(radm[:, :, 2].max()-radm[:, :, 2].min())*255
+
+radm = cv2.applyColorMap(radm.astype(np.uint8), cv2.COLORMAP_JET)
+cv2.imwrite('rad.png', radm)
+
+for pt in pts:
+  cv2.circle(imgs[0], pt[::-1], 3, (0, 0, 255))
+
+cv2.imwrite('pts.jpg', imgs[0])
+
+print('HDR done!')
