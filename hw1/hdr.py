@@ -18,6 +18,9 @@ import numpy as np
 w = np.arange(256)
 w[w>127] = 255.-w[w>127]
 
+# Set epsilon
+eps = 1e-8
+
 # Fill the Sparse linear system
 def getOptimizeMatrix(imgs, lnts, pts, lamb):
   nImgs = imgs.shape[0]
@@ -32,7 +35,7 @@ def getOptimizeMatrix(imgs, lnts, pts, lamb):
     for i, pt in enumerate(pts):
       z = img[pt]
       A[k, z] = w[z]
-      A[k, i+256] = w[z]
+      A[k, i+256] = -w[z]
       b[k] = lnts[j]*w[z]
       k += 1
   A[k, 127] = 1.
@@ -57,16 +60,16 @@ def getRespondseFunction(A, b):
 
 # Default parameters
 outImage = 'img'
-nPoints = 50
 
-if len(sys.argv)!=2 and len(sys.argv)!=3:
-  print('    Usage: python hdr.py <image list file> [hdr image]')
+if len(sys.argv)!=3 and len(sys.argv)!=4:
+  print('    Usage: python hdr.py <image list file> <number of points> [hdr image]')
   sys.exit(-1)
 else:
   inFile = sys.argv[1]
+  nPoints = int(sys.argv[2])
 
-  if len(sys.argv)==3:
-    outImage = sys.argv[2]
+  if len(sys.argv)==4:
+    outImage = sys.argv[3]
 
 # Get the name of images and its exposure time
 imgs = []
@@ -106,8 +109,11 @@ plt.plot(np.arange(len(gr)), gr, 'r')
 plt.plot(np.arange(len(gg)), gg, 'g')
 plt.plot(np.arange(len(gb)), gb, 'b')
 plt.legend(['R', 'G', 'B'])
+plt.xlabel('Intensity')
+plt.ylabel('Response function')
 
 plt.savefig('z-lnE.png')
+plt.cla()
 
 # Generate the radiance map
 print('Generate the radiance map...')
@@ -118,21 +124,20 @@ for r in xrange(imgHeight):
     zr = imgs[:, r, c, 2]
     zg = imgs[:, r, c, 1]
     zb = imgs[:, r, c, 0]
-    radm[r, c, 2] = np.exp(np.sum(w[zr]*(gr[zr]-lnts))/np.sum(w[zr]))
-    radm[r, c, 1] = np.exp(np.sum(w[zg]*(gg[zg]-lnts))/np.sum(w[zg]))
-    radm[r, c, 0] = np.exp(np.sum(w[zb]*(gb[zb]-lnts))/np.sum(w[zb]))
+    radm[r, c, 2] = np.exp(np.sum(w[zr]*(gr[zr]-lnts))/(np.sum(w[zr])+eps))
+    radm[r, c, 1] = np.exp(np.sum(w[zg]*(gg[zg]-lnts))/(np.sum(w[zg])+eps))
+    radm[r, c, 0] = np.exp(np.sum(w[zb]*(gb[zb]-lnts))/(np.sum(w[zb])+eps))
 
 # Output the HDR image
-cv2.imwrite(outImage+'.hdr', radm)
 
-radm = np.log(radm)
+rad = np.log(radm)
 
-radm[:, :, 0] = (radm[:, :, 0]-radm[:, :, 0].min())/(radm[:, :, 0].max()-radm[:, :, 0].min())*255
-radm[:, :, 1] = (radm[:, :, 1]-radm[:, :, 1].min())/(radm[:, :, 1].max()-radm[:, :, 1].min())*255
-radm[:, :, 2] = (radm[:, :, 2]-radm[:, :, 2].min())/(radm[:, :, 2].max()-radm[:, :, 2].min())*255
+rad[:, :, 0] = (rad[:, :, 0]-rad[:, :, 0].min())/(rad[:, :, 0].max()-rad[:, :, 0].min()+eps)*255
+rad[:, :, 1] = (rad[:, :, 1]-rad[:, :, 1].min())/(rad[:, :, 1].max()-rad[:, :, 1].min()+eps)*255
+rad[:, :, 2] = (rad[:, :, 2]-rad[:, :, 2].min())/(rad[:, :, 2].max()-rad[:, :, 2].min()+eps)*255
 
-radm = cv2.applyColorMap(radm.astype(np.uint8), cv2.COLORMAP_JET)
-cv2.imwrite('rad.png', radm)
+rad = cv2.applyColorMap(rad.astype(np.uint8), cv2.COLORMAP_JET)
+cv2.imwrite('rad.png', rad)
 
 for pt in pts:
   cv2.circle(imgs[0], pt[::-1], 3, (0, 0, 255))
