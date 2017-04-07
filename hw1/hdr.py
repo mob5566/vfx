@@ -14,6 +14,8 @@ import sys
 import cv2
 import numpy as np
 
+import OpenEXR, array
+
 # Triangular hat weighting function
 w = np.arange(256)
 w[w>127] = 255.-w[w>127]
@@ -128,8 +130,16 @@ for r in xrange(imgHeight):
     radm[r, c, 1] = np.exp(np.sum(w[zg]*(gg[zg]-lnts))/(np.sum(w[zg])+eps))
     radm[r, c, 0] = np.exp(np.sum(w[zb]*(gb[zb]-lnts))/(np.sum(w[zb])+eps))
 
-# Output the HDR image
+# Output the EXR image
+exr = OpenEXR.OutputFile(outImage+'.exr', OpenEXR.Header(*radm.shape[:2][::-1]))
 
+r = array.array('f', radm[:, :, 2].reshape(-1)).tostring()
+g = array.array('f', radm[:, :, 1].reshape(-1)).tostring()
+b = array.array('f', radm[:, :, 0].reshape(-1)).tostring()
+
+exr.writePixels({'R': r, 'G': g, 'B': b})
+
+# Output radiance map
 rad = np.log(radm)
 
 rad[:, :, 0] = (rad[:, :, 0]-rad[:, :, 0].min())/(rad[:, :, 0].max()-rad[:, :, 0].min()+eps)*255
@@ -139,6 +149,7 @@ rad[:, :, 2] = (rad[:, :, 2]-rad[:, :, 2].min())/(rad[:, :, 2].max()-rad[:, :, 2
 rad = cv2.applyColorMap(rad.astype(np.uint8), cv2.COLORMAP_JET)
 cv2.imwrite('rad.png', rad)
 
+# Show the draw points
 for pt in pts:
   cv2.circle(imgs[0], pt[::-1], 3, (0, 0, 255))
 
