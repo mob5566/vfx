@@ -14,3 +14,10 @@
 
 # image list file
 *.txt
+
+# image types
+*.exr
+*.tiff
+*.jpg
+*.png
+
