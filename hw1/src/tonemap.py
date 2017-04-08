@@ -20,7 +20,9 @@ def tonemap(img, basecon, spasig, ransig, gammacor):
   width = img.shape[1]
   height = img.shape[0]
 
-  gimg = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+  hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+  gimg = hsv[..., 2]
+  gimg = np.power(gimg, gammacor)
   lgimg = np.log(gimg)
 
   # Multiscale decomposition
@@ -34,17 +36,14 @@ def tonemap(img, basecon, spasig, ransig, gammacor):
   nimg = np.exp(base+detail)
 
   # Recompose color image
-  cimg = (nimg/gimg).reshape(height, width, 1)*img
+  hsv[..., 2] = nimg
+  cimg = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
   # Normalize 
   for i in xrange(cimg.shape[2]):
     cimg[..., i] = imgscaling(cimg[..., i])
   
   nimg = imgscaling(nimg)
-
-  # Gamma correction
-  cimg = np.power(cimg, gammacor)
-  nimg = np.power(nimg, gammacor)
 
   return cimg, base, detail, nimg
 
@@ -75,7 +74,7 @@ cv2.namedWindow(wn)
 bc = 'Base contrast'
 sks = 'Spatial kernel sigma' 
 rks = 'Range kernel sigma'
-gm = 'Gamma correction (*0.1)'
+gm = 'Pre-gamma correction (*0.1)'
 
 cv2.createTrackbar(bc, wn, 5, 50, nothing)
 cv2.createTrackbar(sks, wn, 2, 100, nothing)
@@ -98,8 +97,6 @@ oimg = img
 base = np.zeros(img.shape[:2])
 detail = np.zeros(img.shape[:2])
 nimg = np.zeros(img.shape[:2])
-
-img = np.power(imgscaling(img), 0.45)
 
 while True:
   cv2.imshow(wn, simg)
@@ -130,10 +127,10 @@ while True:
     para = '_bc'+str(baseContrast)+'_ss'+str(spatialsig)+'_rs'+str(rangesig)+'_gm'+str(gamma)
 
     print('Saving image...')
-    cv2.imwrite(outImage+para+'.tiff', oimg)
-    cv2.imwrite(outImage+para+'_base.tiff', np.repeat(base.reshape(oimg.shape[0], -1, 1), 3, axis=2))
-    cv2.imwrite(outImage+para+'_detail.tiff', np.repeat(detail.reshape(oimg.shape[0], -1, 1), 3, axis=2))
-    cv2.imwrite(outImage+para+'_nimg.tiff', np.repeat(nimg.reshape(oimg.shape[0], -1, 1), 3, axis=2))
+    cv2.imwrite(outImage+para+'.jpg', (257*oimg))
+    cv2.imwrite(outImage+para+'_base.jpg', (257*np.repeat(base.reshape(oimg.shape[0], -1, 1), 3, axis=2)))
+    cv2.imwrite(outImage+para+'_detail.jpg', (257*np.repeat(detail.reshape(oimg.shape[0], -1, 1), 3, axis=2)))
+    cv2.imwrite(outImage+para+'_nimg.jpg', (257*np.repeat(nimg.reshape(oimg.shape[0], -1, 1), 3, axis=2)))
     print('Save done')
 
   # Restore simg
