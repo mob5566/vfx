@@ -4,6 +4,7 @@
 
 # data directories
 /**/data
+/**/input_image
 
 # python temp files
 *.pyc
@@ -21,3 +22,5 @@
 *.jpg
 *.png
 
+# zip files
+*.zip
