@@ -19,7 +19,7 @@ from itertools import product
 # Epsilon
 eps = 1e-8
 
-class MSOP():
+class MSOP(object):
   def __init__(self, numFeat=500, pyrLevel=5, fhmt=10.0):
     self.nf = numFeat       # Number of features
     self.pyrl = pyrLevel    # Number of levels of pyramid
@@ -64,13 +64,33 @@ class MSOP():
 
       # Detect key points
       for x, y in product(range(1, cw-1), range(1, ch-1)):
-        if fhm[y, x]>=self.ft and np.all(fhm[y, x]>=fhm[y-1:y+2, x-1:x+2].reshape(-1)):
-          self.kp.append((x, y, l, fhm[y, x]))
+        nei = fhm[y-1:y+2, x-1:x+2]
+        if fhm[y, x]>=self.ft and np.all(fhm[y, x]>=nei.reshape(-1)):
+          sx, sy = MSOP.spa((x, y), nei)
+          self.kp.append((sx, sy, l, fhm[int(round(sy)), int(round(sx))]))
 
       p = cv2.GaussianBlur(p, (5, 5), 1.0)
       p = cv2.resize(p, (p.shape[1]/2, p.shape[0]/2))
 
     return self.kp
+
+  # Sub-pixel Accuracy
+  @staticmethod
+  def spa(p, neig):
+
+    # Derivatives
+    dx = (neig[1, 2]-neig[1, 0])/2.0
+    dy = (neig[2, 1]-neig[0, 1])/2.0
+    dxx = neig[1, 2]-2.0*neig[1, 1]+neig[1, 0]
+    dyy = neig[2, 1]-2.0*neig[1, 1]+neig[0, 1]
+    dxy = ((neig[2, 2]-neig[2, 0])-(neig[0, 2]-neig[0, 0]))/4.0
+
+    # First-order and Second-order derivative
+    fd = np.array([[dx], [dy]])
+    sd = np.array([[dxx, dxy], [dxy, dyy]])
+
+    pm = -np.dot(np.linalg.inv(sd), fd)
+    return (p[0]+pm[0], p[1]+pm[1])
   
   # Adaptive Non-Maximal Suppression
   def anms(self):
