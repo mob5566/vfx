@@ -20,7 +20,7 @@ from itertools import product
 eps = 1e-8
 
 class MSOP(object):
-  def __init__(self, numFeat=500, pyrLevel=5, fhmt=10.0):
+  def __init__(self, numFeat=500, pyrLevel=3, fhmt=10.0):
     self.nf = numFeat       # Number of features
     self.pyrl = pyrLevel    # Number of levels of pyramid
     self.ft = fhmt          # Harmonic mean threshold
@@ -41,8 +41,15 @@ class MSOP(object):
     h, w = gimg.shape
     p = gimg.astype(float)
     self.kp = []
+    self.pyramid = [p.copy()]
+
+    for l in xrange(1, self.pyrl):
+      p = cv2.GaussianBlur(p, (5, 5), 1.0)
+      p = cv2.resize(p, (p.shape[1]/2, p.shape[0]/2))
+      self.pyramid.append(p.copy())
 
     for l in xrange(self.pyrl):
+      p = self.pyramid[l]
       pdx = cv2.Sobel(p, cv2.CV_64F, 1, 0, ksize=5)
       pdy = cv2.Sobel(p, cv2.CV_64F, 0, 1, ksize=5)
 
@@ -76,9 +83,6 @@ class MSOP(object):
           dy = pgody[isy, isx]/np.sqrt(pgodx[isy, isx]**2+pgody[isy, isx]**2)
 
           self.kp.append((sx, sy, l, (dx, dy), fhm[isy, isx]))
-
-      p = cv2.GaussianBlur(p, (5, 5), 1.0)
-      p = cv2.resize(p, (p.shape[1]/2, p.shape[0]/2))
 
     return self.kp
 
