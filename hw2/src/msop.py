@@ -15,6 +15,7 @@ import sys
 
 import cv2
 import numpy as np
+from scipy.spatial import KDTree
 
 from itertools import product
 
@@ -123,6 +124,7 @@ class MSOP(object):
   # Compute the descriptor of features
   def descriptor(self):
     desp = []
+    coef = []
     gk = cv2.GaussianBlur
     ksize = (5, 5)
     ppyramid = [gk(gk(pyr.copy(), ksize, 1.0), ksize, 1.0) for pyr in self.pyramid]
@@ -140,14 +142,13 @@ class MSOP(object):
       M = cv2.getRotationMatrix2D((x, y), -theta, 1.)
       trans = cv2.warpAffine(pimg, M, (cw, ch))
       patch = cv2.getRectSubPix(np.round(trans).astype(np.uint8), patchSize, (x, y))
-      patch = cv2.resize(patch, featSize)
-
-      des = patch.reshape(-1).astype(np.float)
-      des = (des-des.mean())/(des.std()+eps)
-
-      desp.append(des)
+      patch = cv2.resize(patch, featSize).astype(np.float)
+      patch = (patch-patch.mean())/(patch.std()+eps)
+      
+      desp.append(patch.reshape(-1))
 
     self.desp = np.array(desp)
+
     return self.desp
 
   # Find keypoints and compute descriptor
@@ -160,11 +161,15 @@ class MSOP(object):
 
   # Draw keypoints
   @staticmethod
-  def drawKeypoints(img, kp, top=30, cc=(0, 0, 255), cl=(255, 0, 0)):
+  def drawKeypoints(img, kp, top=None, cc=(0, 0, 255), cl=(255, 0, 0), showScale=False):
     assert(len(cc)==3)
     cc = tuple(cc)
     assert(len(cl)==3)
     cl = tuple(cl)
+
+    if not top:
+      top = len(kp)
+
     for p in kp[:top]:
       x, y, l, (dx, dy) = p
 
@@ -174,8 +179,11 @@ class MSOP(object):
       cx2 = toi((x+dx*20)*2**l)
       cy2 = toi((y+dy*20)*2**l)
 
-      cv2.circle(img, (cx1, cy1), 20*2**l, cc)
-      cv2.line(img, (cx1, cy1), (cx2, cy2), cl, 1)
+      if showScale:
+        cv2.circle(img, (cx1, cy1), 20*2**l, cc)
+        cv2.line(img, (cx1, cy1), (cx2, cy2), cl, 1)
+      else:
+        cv2.circle(img, (cx1, cy1), 2, cc)
     
   # Sub-pixel Accuracy
   @staticmethod
@@ -195,22 +203,76 @@ class MSOP(object):
     pm = -np.dot(np.linalg.inv(sd), fd)
     return (p[0]+pm[0, 0], p[1]+pm[1, 0])
 
-def main(imgname):
-  # Main function for MSOP testing
+  # Image MSOP matching
+  @staticmethod
+  def imageMatch(despa, kdtb):
+    matchkp = []
+    f = 0.65
+
+    for ki in xrange(len(despa)):
+      (nn1, nn2), (kb, _) = kdtb.query(despa[ki], 2)
+
+      if nn1 < f*nn2:
+        matchkp.append((ki, kb))
+    
+    return matchkp
+
+def testMSOP(imgname):
+  # Function for MSOP testing
   img = cv2.imread(imgname)
 
   fd = MSOP(pyrLevel=3)
   kp, desp = fd.detectAndDescribe(img)
 
-  MSOP.drawKeypoints(img, kp, top=100)
+  MSOP.drawKeypoints(img, kp, top=100, showScale=True)
 
   cv2.imwrite(os.path.basename(imgname), img)
 
   return kp, desp
 
+def testMatch(imn1, imn2):
+  # Function for image matching testing
+  img1 = cv2.imread(imn1)
+  img2 = cv2.imread(imn2)
+
+  fd = MSOP(pyrLevel=3, numFeat=1000)
+  kp1, desp1 = fd.detectAndDescribe(img1)
+  kp2, desp2 = fd.detectAndDescribe(img2)
+
+  kdtb = KDTree(desp2)
+  matchkp = MSOP.imageMatch(desp1, kdtb)
+
+  matA = set([u for u, v in matchkp])
+  matB = set([v for u, v in matchkp])
+
+  kp1m = []
+  kp1n = []
+  kp2m = []
+  kp2n = []
+
+  for i in xrange(len(kp1)):
+    if i in matA:
+      kp1m.append(kp1[i])
+    else:
+      kp1n.append(kp1[i])
+  
+  for i in xrange(len(kp2)):
+    if i in matB:
+      kp2m.append(kp2[i])
+    else:
+      kp2n.append(kp2[i])
+
+  MSOP.drawKeypoints(img1, kp1m, cc=(0, 255, 0))
+  MSOP.drawKeypoints(img1, kp1n, cc=(0, 0, 255))
+  MSOP.drawKeypoints(img2, kp2m, cc=(0, 255, 0))
+  MSOP.drawKeypoints(img2, kp2n, cc=(0, 0, 255))
+
+  cv2.imwrite(os.path.basename(imn1), img1)
+  cv2.imwrite(os.path.basename(imn2), img2)
+
 if __name__=='__main__':
   if len(sys.argv)==2:
-    kp, desp = main(sys.argv[1])
-  else:
-    kp, desp = main('data/parrington/prtn00.jpg')
+    kp, desp = testMSOP(sys.argv[1])
   
+  if len(sys.argv)==3:
+    testMatch(sys.argv[1], sys.argv[2])
