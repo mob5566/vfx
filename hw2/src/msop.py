@@ -1,8 +1,10 @@
 '''
 # msop.py -- Multi-Scale Oriented Patches feature
 
-* for digital visual effects homework1
-* generate a hdr image by <image-list>
+* for digital visual effects homework2
+* Multi-Scale Oriented Patches feature of feature matching
+* Reference from M. Brown, R. Szeliski, and S. Winder
+* "Multi-Image Matching using Multi-Scale Oriented Patches"
 
 '''
 
