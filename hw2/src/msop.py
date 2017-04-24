@@ -54,8 +54,8 @@ class MSOP(object):
 
     for l in xrange(self.pyrl):
       p = self.pyramid[l]
-      pdx = cv2.Sobel(p, cv2.CV_64F, 1, 0, ksize=5)
-      pdy = cv2.Sobel(p, cv2.CV_64F, 0, 1, ksize=5)
+      pdx = cv2.Sobel(p, cv2.CV_64F, 1, 0, ksize=1)
+      pdy = cv2.Sobel(p, cv2.CV_64F, 0, 1, ksize=1)
 
       pgdx = cv2.GaussianBlur(pdx, (5, 5), 1.0)
       pgdy = cv2.GaussianBlur(pdy, (5, 5), 1.0)
