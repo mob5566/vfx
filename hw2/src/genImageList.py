@@ -25,6 +25,8 @@ else:
 # Get the name of images and output file name
 fns = os.listdir(imgsdir)
 
+fns.sort()
+
 # Write the information to the output file
 with open(outf, 'wb') as f:
   for fn in fns:
