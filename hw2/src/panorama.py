@@ -39,6 +39,18 @@ class Panorama(object):
         self.fl.append(fl)
         self.imgs.append(Panorama.cylin_project(cv2.imread(imgfn), fl))
 
+    # Construct the descriptor of each image and k-d tree
+    feat_detect = MSOP(pyrLevel=5, numFeat=1000)
+    self.kp = []
+    self.fd = []
+    self.tree = []
+    
+    for img in self.imgs:
+      kp, desp = feat_detect.detectAndDescribe(img)
+      self.kp.append(kp)
+      self.fd.append(desp)
+      self.tree.append(KDTree(desp))
+
   '''
   Static methods
   '''
