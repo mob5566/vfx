@@ -203,9 +203,45 @@ class MSOP(object):
     pm = -np.dot(np.linalg.inv(sd), fd)
     return (p[0]+pm[0, 0], p[1]+pm[1, 0])
 
+  # RANSAC
+  @staticmethod
+  def ransac(kpa, kpb, sample_n=3, p_inlier=0.6, P=0.99, inlier_thresh=5):
+    pa = np.array([(x, y) for x, y, _, _ in kpa])
+    pb = np.array([(x, y) for x, y, _, _ in kpb])
+    n = len(pa)
+
+    k = np.ceil(np.log(1-P)/np.log(1-p_inlier**sample_n)).astype(int)
+
+    maxin = 0
+    bestM = None
+    inliers = None
+    sample_mask = np.array([False]*n)
+    sample_mask[:sample_n] = True
+
+    for i in xrange(k):
+      # Sample n points
+      sample_mask = np.random.permutation(sample_mask)
+      spa = pa[sample_mask]
+      spb = pb[sample_mask]
+
+      # Compute transformation
+      M = cv2.getAffineTransform(spb.astype(np.float32), spa.astype(np.float32))
+
+      tpa = np.dot(M, np.append(pb, np.ones(n).reshape(-1, 1), axis=1).T).T
+      inl = np.linalg.norm(pa-tpa, axis=1) < inlier_thresh
+
+      if maxin < inl.sum():
+        maxin = inl.sum()
+        bestM = M.copy()
+        inliers = inl.copy()
+
+    return bestM, inliers
+
   # Image MSOP matching
   @staticmethod
-  def imageMatch(despa, kdtb):
+  def imageMatch(infoA, infoB):
+    kpa, despa, kdta = infoA
+    kpb, despb, kdtb = infoB
     matchkp = []
     f = 0.65
 
@@ -215,7 +251,21 @@ class MSOP(object):
       if nn1 < f*nn2:
         matchkp.append((ki, kb))
     
-    return matchkp
+    mkpa = []
+    mkpb = []
+
+    for (ka, kb) in matchkp:
+      mkpa.append(kpa[ka])
+      mkpb.append(kpb[kb])
+
+    M, inliers = MSOP.ransac(mkpa, mkpb)
+
+    newmatchkp = []
+
+    for v, kp in zip(inliers, matchkp):
+      if v: newmatchkp.append(kp)
+    
+    return (inliers.sum() > 5.9+0.22*len(matchkp)), (newmatchkp, M)
 
 def testMSOP(imgname):
   # Function for MSOP testing
@@ -239,8 +289,9 @@ def testMatch(imn1, imn2):
   kp1, desp1 = fd.detectAndDescribe(img1)
   kp2, desp2 = fd.detectAndDescribe(img2)
 
-  kdtb = KDTree(desp2)
-  matchkp = MSOP.imageMatch(desp1, kdtb)
+  kdt1 = KDTree(desp1)
+  kdt2 = KDTree(desp2)
+  ismatch, (matchkp, M) = MSOP.imageMatch((kp1, desp1, kdt1), (kp2, desp2, kdt2))
 
   matA = set([u for u, v in matchkp])
   matB = set([v for u, v in matchkp])
