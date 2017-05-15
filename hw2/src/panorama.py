@@ -13,12 +13,21 @@ from __future__ import print_function
 
 import os
 import sys
+from itertools import combinations
 
 import cv2
 import numpy as np
 from scipy.spatial import KDTree
 
 from msop import MSOP
+
+def dfs(vis, edge, u, con):
+  con.append(u)
+  vis.add(u)
+  
+  for (v, _) in edge[u]:
+    if v not in vis:
+      dfs(vis, edge, v, con)
 
 class Panorama(object):
   def __init__(self, imglistfile):
@@ -41,15 +50,31 @@ class Panorama(object):
 
     # Construct the descriptor of each image and k-d tree
     feat_detect = MSOP(pyrLevel=5, numFeat=1000)
-    self.kp = []
-    self.fd = []
-    self.tree = []
+    self.info = []
     
     for img in self.imgs:
       kp, desp = feat_detect.detectAndDescribe(img)
-      self.kp.append(kp)
-      self.fd.append(desp)
-      self.tree.append(KDTree(desp))
+      self.info.append((kp, desp, KDTree(desp)))
+
+    # Match images
+    edge = [[] for i in xrange(len(img))]
+
+    for ((i, infoA), (j, infoB)) in combinations(enumerate(self.info), 2):
+      ismatch, (matchkp, M) = MSOP.imageMatch(infoA, infoB)
+
+      if ismatch:
+        edge[i].append((j, M))
+      
+    # Construct connected components
+    connected = []
+    vis = set()
+
+    for i in xrange(len(self.imgs)):
+      if i not in vis:
+        con = []
+        dfs(vis, edge, i, con)
+        connected.append(con)
+
 
   '''
   Static methods
