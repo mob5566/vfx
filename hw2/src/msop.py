@@ -210,6 +210,9 @@ class MSOP(object):
     pb = np.array([(x, y) for x, y, _, _ in kpb])
     n = len(pa)
 
+    if n < 10:
+      return None, None
+
     k = np.ceil(np.log(1-P)/np.log(1-p_inlier**sample_n)).astype(int)
 
     maxin = 0
@@ -250,6 +253,9 @@ class MSOP(object):
 
       if nn1 < f*nn2:
         matchkp.append((ki, kb))
+
+    if len(matchkp) < 10:
+      return False, (None, None)
     
     mkpa = []
     mkpb = []
