@@ -14,6 +14,7 @@ from __future__ import print_function
 import os
 import sys
 from itertools import combinations
+from itertools import product
 
 import cv2
 import numpy as np
@@ -21,13 +22,23 @@ from scipy.spatial import KDTree
 
 from msop import MSOP
 
-def dfs(vis, edge, u, con):
+def dfs(vis, imgs, M, edge, u, con, bound, accM):
   con.append(u)
   vis.add(u)
+  (h, w) = imgs[u].shape[:2]
+  M[u] = accM
+
+  for (x, y) in product((0, w), (0, h)):
+    p = np.dot(accM[:2], [[x], [y], [1]])
+
+    bound[0] = min(bound[0], p[0])
+    bound[1] = min(bound[1], p[1])
+    bound[2] = max(bound[2], p[0])
+    bound[3] = max(bound[3], p[1])
   
-  for (v, _) in edge[u]:
+  for (v, vM) in edge[u]:
     if v not in vis:
-      dfs(vis, edge, v, con)
+      dfs(vis, imgs, M, edge, v, con, bound, np.dot(accM, vM))
 
 class Panorama(object):
   def __init__(self, imglistfile):
@@ -57,23 +68,26 @@ class Panorama(object):
       self.info.append((kp, desp, KDTree(desp)))
 
     # Match images
-    edge = [[] for i in xrange(len(img))]
+    self.edge = [[] for i in xrange(len(img))]
 
     for ((i, infoA), (j, infoB)) in combinations(enumerate(self.info), 2):
       ismatch, (matchkp, M) = MSOP.imageMatch(infoA, infoB)
 
       if ismatch:
-        edge[i].append((j, M))
+        M = np.append(M, [[0, 0, 1]], axis=0)
+        self.edge[i].append((j, M))
       
-    # Construct connected components
-    connected = []
+    # Detect panoramas and construct connected components
+    self.connected = []
+    self.M = {}
     vis = set()
 
     for i in xrange(len(self.imgs)):
       if i not in vis:
         con = []
-        dfs(vis, edge, i, con)
-        connected.append(con)
+        bound = np.array([1e5, 1e5, 0, 0])
+        dfs(vis, self.imgs, self.M, self.edge, i, con, bound, np.eye(3))
+        self.connected.append((con, bound))
 
 
   '''
