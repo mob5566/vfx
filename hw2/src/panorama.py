@@ -85,10 +85,25 @@ class Panorama(object):
     for i in xrange(len(self.imgs)):
       if i not in vis:
         con = []
-        bound = np.array([1e5, 1e5, 0, 0])
+        bound = np.array([0, 0, 0, 0])
         dfs(vis, self.imgs, self.M, self.edge, i, con, bound, np.eye(3))
         self.connected.append((con, bound))
 
+    # Construct panorama for each connected components
+    for (con, bound) in self.connected:
+      if len(con)<=1: continue
+
+      baseM = np.array([[1, 0, -bound[0]], [0, 1, -bound[1]], [0, 0, 1]])
+      nw = np.ceil(bound[2]-bound[0]).astype(int)
+      nh = np.ceil(bound[3]-bound[1]).astype(int)
+      baseImg = np.zeros((nh, nw), dtype=np.uint8)
+
+      for u in con:
+        self.M[u] = np.dot(baseM, self.M[u])
+
+      for u in con:
+        newImg = cv2.warpAffine(self.imgs[u], self.M[u][:2], (nw, nh))
+        cv2.imwrite('{}.jpg'.format(u), newImg)
 
   '''
   Static methods
