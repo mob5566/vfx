@@ -31,6 +31,7 @@ fns.sort()
 with open(outf, 'wb') as f:
   for fn in fns:
     afn = os.path.abspath(os.path.join(imgsdir, fn))
+    fn = os.path.join(imgsdir, fn)
 
-    f.write('{}\n'.format(afn))
+    f.write('{}\n'.format(fn))
 
