@@ -22,6 +22,15 @@ from itertools import product
 # Epsilon
 eps = 1e-8
 
+# Transformation
+def getTranslationTransform(pa, pb):
+  assert(type(pa)==np.ndarray and pa.shape==(1,2))
+  assert(type(pb)==np.ndarray and pb.shape==(1,2))
+
+  x, y = pb[0]-pa[0]
+
+  return np.array([[1, 0, x], [0, 1, y]])
+
 class MSOP(object):
   def __init__(self, numFeat=500, pyrLevel=3, fhmt=10.0, samplePatchSize=8, sampleSpace=5):
     self.nf = numFeat           # Number of features
@@ -205,7 +214,7 @@ class MSOP(object):
 
   # RANSAC
   @staticmethod
-  def ransac(kpa, kpb, sample_n=3, p_inlier=0.6, P=0.99, inlier_thresh=5):
+  def ransac(kpa, kpb, sample_n=1, p_inlier=0.6, P=0.99, inlier_thresh=5):
     pa = np.array([(x, y) for x, y, _, _ in kpa])
     pb = np.array([(x, y) for x, y, _, _ in kpb])
     n = len(pa)
@@ -228,7 +237,7 @@ class MSOP(object):
       spb = pb[sample_mask]
 
       # Compute transformation
-      M = cv2.getAffineTransform(spb.astype(np.float32), spa.astype(np.float32))
+      M = getTranslationTransform(spb.astype(np.float32), spa.astype(np.float32))
 
       tpa = np.dot(M, np.append(pb, np.ones(n).reshape(-1, 1), axis=1).T).T
       inl = np.linalg.norm(pa-tpa, axis=1) < inlier_thresh
@@ -265,6 +274,9 @@ class MSOP(object):
       mkpb.append(kpb[kb])
 
     M, inliers = MSOP.ransac(mkpa, mkpb)
+
+    if M is None:
+      return False, (None, None)
 
     newmatchkp = []
 
