@@ -12,6 +12,7 @@ from __future__ import print_function
 
 import os
 import sys
+import cPickle as pickle
 
 import cv2
 import numpy as np
@@ -90,13 +91,15 @@ class MSOP(object):
       for x, y in product(range(30, cw-30), range(30, ch-30)):
         nei = fhm[y-1:y+2, x-1:x+2]
         if fhm[y, x]>=self.ft and np.all(fhm[y, x]>=nei.reshape(-1)):
-          sx, sy = MSOP.spa((x, y), nei)
-          isx = int(round(sx))
-          isy = int(round(sy))
+          # sx, sy = MSOP.spa((x, y), nei)
+          # isx = int(round(sx))
+          # isy = int(round(sy))
+          isx = x
+          isy = y
           dx = pgodx[isy, isx]/np.sqrt(pgodx[isy, isx]**2+pgody[isy, isx]**2)
           dy = pgody[isy, isx]/np.sqrt(pgodx[isy, isx]**2+pgody[isy, isx]**2)
 
-          self.kp.append((sx, sy, l, (dx, dy), fhm[isy, isx]))
+          self.kp.append((x, y, l, (dx, dy), fhm[isy, isx]))
 
     return self.kp
 
@@ -162,9 +165,17 @@ class MSOP(object):
 
   # Find keypoints and compute descriptor
   def detectAndDescribe(self, img):
-    self.detect(img)
-    kp = self.anms()
-    desp = self.descriptor()
+    feat_fn = img[:-4]+'_feat.pkl'
+    
+    if os.path.exists(feat_fn):
+      with open(feat_fn, 'rb') as f:
+        (kp, desp) = pickle.load(f)
+    else:
+      self.detect(cv2.imread(img))
+      kp = self.anms()
+      desp = self.descriptor()
+      with open(feat_fn, 'wb') as f:
+        pickle.dump((kp, desp), f)
 
     return kp, desp
 
@@ -290,7 +301,7 @@ def testMSOP(imgname):
   img = cv2.imread(imgname)
 
   fd = MSOP(pyrLevel=3)
-  kp, desp = fd.detectAndDescribe(img)
+  kp, desp = fd.detectAndDescribe(imgname)
 
   MSOP.drawKeypoints(img, kp, top=100, showScale=True)
 
@@ -304,8 +315,8 @@ def testMatch(imn1, imn2):
   img2 = cv2.imread(imn2)
 
   fd = MSOP(pyrLevel=3, numFeat=1000)
-  kp1, desp1 = fd.detectAndDescribe(img1)
-  kp2, desp2 = fd.detectAndDescribe(img2)
+  kp1, desp1 = fd.detectAndDescribe(imn1)
+  kp2, desp2 = fd.detectAndDescribe(imn2)
 
   kdt1 = KDTree(desp1)
   kdt2 = KDTree(desp2)

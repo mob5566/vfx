@@ -41,15 +41,22 @@ def dfs(vis, imgs, M, edge, u, con, bound, accM):
       dfs(vis, imgs, M, edge, v, con, bound, np.dot(accM, vM))
 
 class Panorama(object):
-  def __init__(self, imglistfile):
+  def process(self, imglistfile, outdir, dedrift=True):
+
+    # Create directory
+    if not os.path.exists(outdir):
+      os.makedirs(outdir)
 
     if not os.path.exists(imglistfile):
       print("{} doesn't exist!".format(imglistfile))
       sys.exit(-1)
 
     # Initialize all images with focal length
+    print('Loading images...')
     self.fl = []
     self.imgs = []
+    self.imgfn = []
+    self.dedrift = dedrift
 
     with open(imglistfile, 'rb') as f:
       for line in f.readlines():
@@ -58,17 +65,21 @@ class Panorama(object):
         
         self.fl.append(fl)
         self.imgs.append(Panorama.cylin_project(cv2.imread(imgfn), fl))
+        self.imgfn.append('{}/cylin_{}.jpg'.format(outdir, len(self.imgs)))
+        cv2.imwrite(self.imgfn[-1], self.imgs[-1])
 
     # Construct the descriptor of each image and k-d tree
+    print('Constructing features...')
     feat_detect = MSOP(pyrLevel=5, numFeat=1000)
     self.info = []
     
-    for img in self.imgs:
-      kp, desp = feat_detect.detectAndDescribe(img)
+    for fn in self.imgfn:
+      kp, desp = feat_detect.detectAndDescribe(fn)
       self.info.append((kp, desp, KDTree(desp)))
 
     # Match images
-    self.edge = [[] for i in xrange(len(img))]
+    print('Matching images...')
+    self.edge = [[] for i in xrange(len(self.imgs))]
 
     for ((i, infoA), (j, infoB)) in combinations(enumerate(self.info), 2):
       ismatch, (matchkp, M) = MSOP.imageMatch(infoA, infoB)
@@ -78,6 +89,7 @@ class Panorama(object):
         self.edge[i].append((j, M))
       
     # Detect panoramas and construct connected components
+    print('Detecting connected images...')
     self.connected = []
     self.M = {}
     vis = set()
@@ -90,6 +102,7 @@ class Panorama(object):
         self.connected.append((con, bound))
 
     # Construct panorama for each connected components
+    print('Constructing panoramas...')
     for i, (con, bound) in enumerate(self.connected):
       if len(con)<=1: continue
 
@@ -98,17 +111,27 @@ class Panorama(object):
       nh = np.ceil(bound[3]-bound[1]).astype(int)
       baseImg = np.zeros((nh, nw, 3), dtype=np.uint8)
 
+      ceny = []
+
       for u in con:
         self.M[u] = np.dot(baseM, self.M[u])
+        h, w = self.imgs[u].shape[:2]
+        ceny.append(np.dot(self.M[u], [[w/2], [h/2], [1]])[1])
+
+      # Dedrift by average height
+      if self.dedrift:
+        meany = np.mean(ceny)
+        for j, u in enumerate(con):
+          self.M[u] = np.dot([[1, 0, 0], [0, 1, meany-ceny[j]], [0, 0, 1]], self.M[u])
 
       lx, rx = (None, None)
       
       for u in con:
         newImg = cv2.warpAffine(self.imgs[u], self.M[u][:2], (nw, nh))
-        cv2.imwrite('{}.jpg'.format(u), newImg)
+        cv2.imwrite('{}/{}.jpg'.format(outdir, u), newImg)
 
-        newMask = np.logical_not(np.all(newImg==0, axis=2))
-        mask = np.logical_not(np.all(baseImg==0, axis=2))
+        newMask = np.logical_not(np.all(newImg<=13, axis=2))
+        mask = np.logical_not(np.all(baseImg<=13, axis=2))
         andMask = np.logical_and(mask, newMask)
         xorMask = np.logical_and(np.logical_not(mask), newMask)
 
@@ -147,7 +170,9 @@ class Panorama(object):
 
         baseImg[xorMask] = newImg[xorMask]
 
-      cv2.imwrite('pano_{}.jpg'.format(i), baseImg)
+      cv2.imwrite('{}/pano_{}.jpg'.format(outdir, i), baseImg)
+
+    print('Done!')
 
   '''
   Static methods
@@ -170,11 +195,12 @@ class Panorama(object):
     xm = f*np.tan((x-w/2)/f)+w/2
     ym = (y-h/2)*np.sqrt((np.tan((x-w/2)/f)**2+1))+h/2
 
-    return cv2.remap(img, xm.astype(np.float32), ym.astype(np.float32), cv2.INTER_LINEAR)
+    return cv2.remap(img, xm.astype(np.float32), ym.astype(np.float32), cv2.INTER_LINEAR)[:, 10:-10]
 
 def main(imgname):
   pass 
 
 if __name__=='__main__':
-  if len(sys.argv) == 2:
-    pano = Panorama(sys.argv[1])
+  if len(sys.argv) == 3:
+    pano = Panorama()
+    pano.process(sys.argv[1], sys.argv[2], False)
