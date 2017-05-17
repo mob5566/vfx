@@ -90,20 +90,64 @@ class Panorama(object):
         self.connected.append((con, bound))
 
     # Construct panorama for each connected components
-    for (con, bound) in self.connected:
+    for i, (con, bound) in enumerate(self.connected):
       if len(con)<=1: continue
 
       baseM = np.array([[1, 0, -bound[0]], [0, 1, -bound[1]], [0, 0, 1]])
       nw = np.ceil(bound[2]-bound[0]).astype(int)
       nh = np.ceil(bound[3]-bound[1]).astype(int)
-      baseImg = np.zeros((nh, nw), dtype=np.uint8)
+      baseImg = np.zeros((nh, nw, 3), dtype=np.uint8)
 
       for u in con:
         self.M[u] = np.dot(baseM, self.M[u])
 
+      lx, rx = (None, None)
+      
       for u in con:
         newImg = cv2.warpAffine(self.imgs[u], self.M[u][:2], (nw, nh))
         cv2.imwrite('{}.jpg'.format(u), newImg)
+
+        newMask = np.logical_not(np.all(newImg==0, axis=2))
+        mask = np.logical_not(np.all(baseImg==0, axis=2))
+        andMask = np.logical_and(mask, newMask)
+        xorMask = np.logical_and(np.logical_not(mask), newMask)
+
+        h, w = self.imgs[u].shape[:2]
+        x1 = np.dot(self.M[u], [[0], [0], [1]])[0]
+        x2 = np.dot(self.M[u], [[w], [0], [1]])[0]
+        if x1 > x2:
+          tmp = x2
+          x2 = x1
+          x1 = tmp
+
+        if lx is not None:
+
+          if lx < x2:
+            a = lx
+            b = x2
+            A = newImg
+            B = baseImg
+          elif x1 < rx:
+            a = x1
+            b = rx
+            A = baseImg
+            B = newImg
+
+          row, col = np.where(andMask)
+          for (y, x) in zip(row, col):
+            alpha = (x-a)/(b-a)
+            baseImg[y, x] = A[y, x]*(1-alpha)+B[y, x]*alpha
+
+          lx = min(lx, x1)
+          rx = max(rx, x2)
+
+        else:
+          lx = x1
+          rx = x2
+
+        baseImg[xorMask] = newImg[xorMask]
+
+      cv2.imwrite('pano_{}.jpg'.format(i), baseImg)
 
   '''
   Static methods
