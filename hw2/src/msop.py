@@ -225,7 +225,7 @@ class MSOP(object):
 
   # RANSAC
   @staticmethod
-  def ransac(kpa, kpb, sample_n=1, p_inlier=0.6, P=0.99, inlier_thresh=5):
+  def ransac(kpa, kpb, sample_n=3, p_inlier=0.8, P=0.99, inlier_thresh=10):
     pa = np.array([(x, y) for x, y, _, _ in kpa])
     pb = np.array([(x, y) for x, y, _, _ in kpb])
     n = len(pa)
@@ -248,7 +248,8 @@ class MSOP(object):
       spb = pb[sample_mask]
 
       # Compute transformation
-      M = getTranslationTransform(spb.astype(np.float32), spa.astype(np.float32))
+      # M = getTranslationTransform(spb.astype(np.float32), spa.astype(np.float32))
+      M = cv2.getAffineTransform(spb.astype(np.float32), spa.astype(np.float32))
 
       tpa = np.dot(M, np.append(pb, np.ones(n).reshape(-1, 1), axis=1).T).T
       inl = np.linalg.norm(pa-tpa, axis=1) < inlier_thresh
