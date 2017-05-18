@@ -41,7 +41,7 @@ def dfs(vis, imgs, M, edge, u, con, bound, accM):
       dfs(vis, imgs, M, edge, v, con, bound, np.dot(accM, vM))
 
 class Panorama(object):
-  def process(self, imglistfile, outdir, dedrift=True):
+  def process(self, imglistfile, outdir, dedrift=True, cropR=0.1):
 
     # Create directory
     if not os.path.exists(outdir):
@@ -64,15 +64,20 @@ class Panorama(object):
         fl = float(fl)
         
         self.fl.append(fl)
-        self.imgs.append(Panorama.cylin_project(cv2.imread(imgfn), fl))
-        self.imgfn.append('{}/cylin_{}.jpg'.format(outdir, len(self.imgs)))
+        fn = '{}/cylin_{}.jpg'.format(outdir, os.path.basename(imgfn)[:-4])
+        self.imgfn.append(fn)
+        if os.path.exists(fn):
+          self.imgs.append(cv2.imread(fn))
+        else:
+          self.imgs.append(Panorama.cylin_project(cv2.imread(imgfn), fl))
         cv2.imwrite(self.imgfn[-1], self.imgs[-1])
 
     # Construct the descriptor of each image and k-d tree
     print('Constructing features...')
-    feat_detect = MSOP(pyrLevel=5, numFeat=1000)
+    feat_detect = MSOP(pyrLevel=5, numFeat=2000)
+
     self.info = []
-    
+
     for fn in self.imgfn:
       kp, desp = feat_detect.detectAndDescribe(fn)
       self.info.append((kp, desp, KDTree(desp)))
@@ -105,6 +110,7 @@ class Panorama(object):
     print('Constructing panoramas...')
     for i, (con, bound) in enumerate(self.connected):
       if len(con)<=1: continue
+      print('Generate panorama')
 
       baseM = np.array([[1, 0, -bound[0]], [0, 1, -bound[1]], [0, 0, 1]])
       nw = np.ceil(bound[2]-bound[0]).astype(int)
@@ -170,7 +176,10 @@ class Panorama(object):
 
         baseImg[xorMask] = newImg[xorMask]
 
-      cv2.imwrite('{}/pano_{}.jpg'.format(outdir, i), baseImg)
+      if cropR is None:
+        cv2.imwrite('{}/pano_{}.jpg'.format(outdir, i), baseImg)
+      else:
+        cv2.imwrite('{}/pano_{}.jpg'.format(outdir, i), baseImg[int(nh*cropR):-int(nh*cropR), :])
 
     print('Done!')
 
@@ -195,7 +204,7 @@ class Panorama(object):
     xm = f*np.tan((x-w/2)/f)+w/2
     ym = (y-h/2)*np.sqrt((np.tan((x-w/2)/f)**2+1))+h/2
 
-    return cv2.remap(img, xm.astype(np.float32), ym.astype(np.float32), cv2.INTER_LINEAR)[:, 10:-10]
+    return cv2.remap(img, xm.astype(np.float32), ym.astype(np.float32), cv2.INTER_LINEAR)[:, int(w*0.05):-int(w*0.05)]
 
 def main(imgname):
   pass 
@@ -203,4 +212,4 @@ def main(imgname):
 if __name__=='__main__':
   if len(sys.argv) == 3:
     pano = Panorama()
-    pano.process(sys.argv[1], sys.argv[2], False)
+    pano.process(sys.argv[1], sys.argv[2], False, None)
