@@ -1,0 +1,12 @@
+input_image/IMG_7865.JPG 476.629
+input_image/IMG_7866.JPG 475.719
+input_image/IMG_7867.JPG 462.614
+input_image/IMG_7868.JPG 466.114
+input_image/IMG_7869.JPG 466.371
+input_image/IMG_7858.JPG 466.31
+input_image/IMG_7859.JPG 469.401
+input_image/IMG_7860.JPG 472.802
+input_image/IMG_7861.JPG 473.678
+input_image/IMG_7862.JPG 476.394
+input_image/IMG_7863.JPG 479.115
+input_image/IMG_7864.JPG 485.763
