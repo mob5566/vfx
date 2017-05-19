@@ -8,7 +8,7 @@
 
 ## Homework 2 - Image Stiching
 
-- [ ] Taking photographs
-- [ ] Feature detection/description/matching
-- [ ] Image alignment
-- [ ] Panorama blending
+- [x] Taking photographs
+- [x] Feature detection/description/matching
+- [x] Image alignment
+- [x] Panorama blending
