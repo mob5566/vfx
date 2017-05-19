@@ -32,6 +32,14 @@ def getTranslationTransform(pa, pb):
 
   return np.array([[1, 0, x], [0, 1, y]])
 
+def getAffineTransform(pa, pb):
+  assert(type(pa)==np.ndarray and pa.shape[1]==2)
+  assert(type(pb)==np.ndarray and pb.shape[1]==2)
+
+  M = np.linalg.pinv(np.append(pa, np.ones((len(pa), 1)), axis=1)).dot(pb).T
+
+  return M
+
 class MSOP(object):
   def __init__(self, numFeat=500, pyrLevel=3, fhmt=10.0, samplePatchSize=8, sampleSpace=5):
     self.nf = numFeat           # Number of features
@@ -244,8 +252,8 @@ class MSOP(object):
       spb = pb[sample_mask]
 
       # Compute transformation
-      M = getTranslationTransform(spb.astype(np.float32), spa.astype(np.float32))
-      # M = cv2.getAffineTransform(spb.astype(np.float32), spa.astype(np.float32))
+      # M = getTranslationTransform(spb.astype(np.float32), spa.astype(np.float32))
+      M = getAffineTransform(spb.astype(np.float32), spa.astype(np.float32))
 
       tpa = np.dot(M, np.append(pb, np.ones(n).reshape(-1, 1), axis=1).T).T
       dis = np.linalg.norm(pa-tpa, axis=1)
