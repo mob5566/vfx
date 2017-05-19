@@ -15,6 +15,7 @@ import os
 import sys
 from itertools import combinations
 from itertools import product
+import cPickle as pickle
 
 import cv2
 import numpy as np
@@ -84,14 +85,22 @@ class Panorama(object):
 
     # Match images
     print('Matching images...')
-    self.edge = [[] for i in xrange(len(self.imgs))]
+    edgefile = '{}/edge.pkl'.format(outdir)
+    if os.path.exists(edgefile):
+      with open(edgefile, 'rb') as f:
+        self.edge = pickle.load(f)
+    else:
+      self.edge = [[] for i in xrange(len(self.imgs))]
 
-    for ((i, infoA), (j, infoB)) in combinations(enumerate(self.info), 2):
-      ismatch, (matchkp, M) = MSOP.imageMatch(infoA, infoB)
+      for ((i, infoA), (j, infoB)) in combinations(enumerate(self.info), 2):
+        ismatch, (matchkp, M) = MSOP.imageMatch(infoA, infoB)
 
-      if ismatch:
-        M = np.append(M, [[0, 0, 1]], axis=0)
-        self.edge[i].append((j, M))
+        if ismatch:
+          M = np.append(M, [[0, 0, 1]], axis=0)
+          self.edge[i].append((j, M))
+
+      with open(edgefile, 'wb') as f:
+        pickle.dump(self.edge, f) 
       
     # Detect panoramas and construct connected components
     print('Detecting connected images...')
@@ -144,25 +153,18 @@ class Panorama(object):
         h, w = self.imgs[u].shape[:2]
         x1 = np.dot(self.M[u], [[0], [0], [1]])[0]
         x2 = np.dot(self.M[u], [[w], [0], [1]])[0]
-        if x1 > x2:
-          tmp = x2
-          x2 = x1
-          x1 = tmp
 
         if lx is not None:
-
-          if lx < x2:
-            a = lx
-            b = x2
+          if lx < x2 and x2 < rx:
             A = newImg
             B = baseImg
-          elif x1 < rx:
-            a = x1
-            b = rx
+          elif x1 < rx and rx < x2:
             A = baseImg
             B = newImg
 
           row, col = np.where(andMask)
+          b = float(col.max())
+          a = float(col.min())
           for (y, x) in zip(row, col):
             alpha = (x-a)/(b-a)
             baseImg[y, x] = A[y, x]*(1-alpha)+B[y, x]*alpha
