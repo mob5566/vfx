@@ -25,10 +25,10 @@ eps = 1e-8
 
 # Transformation
 def getTranslationTransform(pa, pb):
-  assert(type(pa)==np.ndarray and pa.shape==(1,2))
-  assert(type(pb)==np.ndarray and pb.shape==(1,2))
+  assert(type(pa)==np.ndarray and pa.shape[1]==2)
+  assert(type(pb)==np.ndarray and pb.shape[1]==2)
 
-  x, y = pb[0]-pa[0]
+  x, y = (pb-pa).mean(axis=0)
 
   return np.array([[1, 0, x], [0, 1, y]])
 
@@ -91,15 +91,11 @@ class MSOP(object):
       for x, y in product(range(30, cw-30), range(30, ch-30)):
         nei = fhm[y-1:y+2, x-1:x+2]
         if fhm[y, x]>=self.ft and np.all(fhm[y, x]>=nei.reshape(-1)):
-          # sx, sy = MSOP.spa((x, y), nei)
-          # isx = int(round(sx))
-          # isy = int(round(sy))
-          isx = x
-          isy = y
-          dx = pgodx[isy, isx]/np.sqrt(pgodx[isy, isx]**2+pgody[isy, isx]**2)
-          dy = pgody[isy, isx]/np.sqrt(pgodx[isy, isx]**2+pgody[isy, isx]**2)
+          sx, sy = MSOP.spa((x, y), nei)
+          dx = pgodx[y, x]/np.sqrt(pgodx[y, x]**2+pgody[y, x]**2)
+          dy = pgody[y, x]/np.sqrt(pgodx[y, x]**2+pgody[y, x]**2)
 
-          self.kp.append((x, y, l, (dx, dy), fhm[isy, isx]))
+          self.kp.append((sx, sy, l, (dx, dy), fhm[y, x]))
 
     return self.kp
 
@@ -225,7 +221,7 @@ class MSOP(object):
 
   # RANSAC
   @staticmethod
-  def ransac(kpa, kpb, sample_n=3, p_inlier=0.8, P=0.99, inlier_thresh=10):
+  def ransac(kpa, kpb, sample_n=3, p_inlier=0.6, P=0.99, inlier_thresh=10):
     pa = np.array([(x, y) for x, y, _, _ in kpa])
     pb = np.array([(x, y) for x, y, _, _ in kpb])
     n = len(pa)
@@ -235,7 +231,7 @@ class MSOP(object):
 
     k = np.ceil(np.log(1-P)/np.log(1-p_inlier**sample_n)).astype(int)
 
-    maxin = 0
+    mindis = 1e7
     bestM = None
     inliers = None
     sample_mask = np.array([False]*n)
@@ -248,14 +244,15 @@ class MSOP(object):
       spb = pb[sample_mask]
 
       # Compute transformation
-      # M = getTranslationTransform(spb.astype(np.float32), spa.astype(np.float32))
-      M = cv2.getAffineTransform(spb.astype(np.float32), spa.astype(np.float32))
+      M = getTranslationTransform(spb.astype(np.float32), spa.astype(np.float32))
+      # M = cv2.getAffineTransform(spb.astype(np.float32), spa.astype(np.float32))
 
       tpa = np.dot(M, np.append(pb, np.ones(n).reshape(-1, 1), axis=1).T).T
-      inl = np.linalg.norm(pa-tpa, axis=1) < inlier_thresh
+      dis = np.linalg.norm(pa-tpa, axis=1)
+      inl = dis < inlier_thresh
 
-      if maxin < inl.sum():
-        maxin = inl.sum()
+      if mindis > dis.sum():
+        mindis = dis.sum()
         bestM = M.copy()
         inliers = inl.copy()
 
